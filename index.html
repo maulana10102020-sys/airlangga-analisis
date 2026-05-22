@@ -16,6 +16,7 @@
         .hidden { display: none; }
     </style>
 </head>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <body>
     <h1>Air Langga Analisis</h1>
     <div id="app">
@@ -59,24 +60,109 @@
 
         // Dashboard setelah login
         function showDashboard(email, role) {
-            appDiv.innerHTML = `
-                <div class="card">
-                    <p>✅ Login sebagai: <strong>${email}</strong></p>
-                    <p>Peran (Role): <strong>${role || 'tidak diketahui'}</strong></p>
-                    <button id="logoutBtn">Logout</button>
-                    <hr>
-                    <div id="roleSpecific">
-                        ${role === 'admin_pusat' ? '<p>📊 Halaman Admin Pusat (upload prodi, dll) segera hadir.</p>' : ''}
-                        ${role === 'admin_cabang' ? '<p>📝 Halaman Admin Cabang (input nilai siswa) segera hadir.</p>' : ''}
-                        ${role === 'siswa' ? '<p>📖 Halaman Siswa (lihat rekomendasi) segera hadir.</p>' : ''}
+        appDiv.innerHTML = `
+        <div class="card">
+            <p>✅ Login sebagai: <strong>${email}</strong></p>
+            <p>Peran (Role): <strong>${role || 'tidak diketahui'}</strong></p>
+            <button id="logoutBtn">Logout</button>
+            <hr>
+            <div id="roleSpecific">
+                ${role === 'admin_pusat' ? `
+                    <div>
+                        <h3>Upload Data Prodi (Excel)</h3>
+                        <input type="file" id="fileInput" accept=".xlsx, .xls" />
+                        <button id="uploadBtn">Upload & Simpan</button>
+                        <div id="uploadStatus"></div>
                     </div>
-                </div>
-            `
-            document.getElementById('logoutBtn').addEventListener('click', async () => {
-                await supabase.auth.signOut()
-                checkSession()
-            })
+                    <hr>
+                    <div id="prodiList"></div>
+                ` : ''}
+                ${role === 'admin_cabang' ? '<p>📝 Halaman Admin Cabang (input nilai siswa) segera hadir.</p>' : ''}
+                ${role === 'siswa' ? '<p>📖 Halaman Siswa (lihat rekomendasi) segera hadir.</p>' : ''}
+            </div>
+        </div>
+    `;
+
+         document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        checkSession();
+    });
+
+    // Bagian untuk admin pusat
+          if (role === 'admin_pusat') {
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const prodiListDiv = document.getElementById('prodiList');
+
+        async function loadProdi() {
+            const { data, error } = await supabase
+                .from('prodi')
+                .select('id, kode_prodi, nama_prodi, universitas')
+                .limit(20);
+            if (error) {
+                prodiListDiv.innerHTML = `<p class="error">Gagal memuat prodi: ${error.message}</p>`;
+            } else if (data.length === 0) {
+                prodiListDiv.innerHTML = '<p>Belum ada data prodi.</p>';
+            } else {
+                prodiListDiv.innerHTML = `
+                    <h4>Daftar Prodi (20 terakhir)</h4>
+                    <ul>${data.map(p => `<li>${p.kode_prodi} - ${p.nama_prodi} (${p.universitas})</li>`).join('')}</ul>
+                `;
+            }
         }
+
+        loadProdi();
+
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                uploadStatus.innerHTML = '<span class="error">Pilih file Excel terlebih dahulu.</span>';
+                return;
+            }
+
+            uploadStatus.innerHTML = 'Membaca file...';
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data);
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet);
+
+                uploadStatus.innerHTML = `Mengupload ${rows.length} baris data...`;
+                let success = 0, failed = 0;
+
+                for (const row of rows) {
+                    const passing_grade = {
+                        matematika: row.matematika || 0,
+                        fisika: row.fisika || 0,
+                        kimia: row.kimia || 0,
+                        biologi: row.biologi || 0,
+                        inggris: row.inggris || 0
+                    };
+                    const { error } = await supabase.from('prodi').insert({
+                        kode_prodi: row.kode_prodi,
+                        nama_prodi: row.nama_prodi,
+                        universitas: row.universitas,
+                        jurusan: row.jurusan,
+                        passing_grade: passing_grade
+                    });
+                    if (error) {
+                        console.error(error);
+                        failed++;
+                    } else {
+                        success++;
+                    }
+                }
+                uploadStatus.innerHTML = `<span class="success">Selesai: ${success} berhasil, ${failed} gagal.</span>`;
+                loadProdi();
+                fileInput.value = '';
+            } catch (err) {
+                uploadStatus.innerHTML = `<span class="error">Terjadi kesalahan: ${err.message}</span>`;
+            }
+        });
+    }
+}
+        
 
         // Form login & daftar
         function showAuthForms() {
