@@ -1,1 +1,28 @@
 <h1>Air Langga Analisis</h1>
+<h1>Air Langga Analisis</h1>
+<div id="status">Memeriksa koneksi...</div>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+  const supabaseUrl = 'https://gquhizsfwvhwrimvdjdj.supabase.co'  // GANTI dengan URL proyek Anda
+  const supabaseAnonKey = 'sb_publishable_YLoNusH6MGbyUOGX2VW8UA_cpmOLrZe'                     // GANTI dengan anon key
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+  // Cek session
+  const { data: { session } } = await supabase.auth.getSession()
+  const statusDiv = document.getElementById('status')
+  
+  if (session) {
+    statusDiv.innerHTML = `✅ Login sebagai: ${session.user.email}`
+    console.log('Login sebagai:', session.user.email)
+  } else {
+    statusDiv.innerHTML = '❌ Belum login. <a href="#" id="loginLink">Login / Daftar</a>'
+    document.getElementById('loginLink')?.addEventListener('click', (e) => {
+      e.preventDefault()
+      // Nanti kita buat form login
+      alert('Fitur login akan segera dibuat')
+    })
+  }
+</script>
