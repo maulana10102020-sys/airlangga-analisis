@@ -1,28 +1,164 @@
-<h1>Air Langga Analisis</h1>
-<h1>Air Langga Analisis</h1>
-<div id="status">Memeriksa koneksi...</div>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Langga Analisis</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 2rem auto; padding: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.3rem; }
+        input, select, button { width: 100%; padding: 0.5rem; margin-top: 0.2rem; }
+        button { background-color: #0070f3; color: white; border: none; cursor: pointer; }
+        .error { color: red; }
+        .success { color: green; }
+        .card { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; border-radius: 8px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Air Langga Analisis</h1>
+    <div id="app">
+        <p>Memuat...</p>
+    </div>
 
-<script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-  const supabaseUrl = 'https://gquhizsfwvhwrimvdjdj.supabase.co'  // GANTI dengan URL proyek Anda
-  const supabaseAnonKey = 'sb_publishable_YLoNusH6MGbyUOGX2VW8UA_cpmOLrZe'                     // GANTI dengan anon key
+        // GANTI dengan data dari Project Settings → API
+        const supabaseUrl = 'https://gquhizsfwvhwrimvdjdj.supabase.co'
+        const supabaseAnonKey = 'sb_publishable_YLoNusH6MGbyUOGX2VW8UA_cpmOLrZe'
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        const appDiv = document.getElementById('app')
 
-  // Cek session
-  const { data: { session } } = await supabase.auth.getSession()
-  const statusDiv = document.getElementById('status')
-  
-  if (session) {
-    statusDiv.innerHTML = `✅ Login sebagai: ${session.user.email}`
-    console.log('Login sebagai:', session.user.email)
-  } else {
-    statusDiv.innerHTML = '❌ Belum login. <a href="#" id="loginLink">Login / Daftar</a>'
-    document.getElementById('loginLink')?.addEventListener('click', (e) => {
-      e.preventDefault()
-      // Nanti kita buat form login
-      alert('Fitur login akan segera dibuat')
-    })
-  }
-</script>
+        // Fungsi untuk mendapatkan role user dari tabel profiles
+        async function getUserRole(userId) {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', userId)
+                .single()
+            if (error) {
+                console.error('Gagal mengambil role:', error)
+                return null
+            }
+            return data?.role
+        }
+
+        // Tampilkan halaman berdasarkan session
+        async function checkSession() {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session) {
+                const role = await getUserRole(session.user.id)
+                showDashboard(session.user.email, role)
+            } else {
+                showAuthForms()
+            }
+        }
+
+        // Dashboard setelah login
+        function showDashboard(email, role) {
+            appDiv.innerHTML = `
+                <div class="card">
+                    <p>✅ Login sebagai: <strong>${email}</strong></p>
+                    <p>Peran (Role): <strong>${role || 'tidak diketahui'}</strong></p>
+                    <button id="logoutBtn">Logout</button>
+                    <hr>
+                    <div id="roleSpecific">
+                        ${role === 'admin_pusat' ? '<p>📊 Halaman Admin Pusat (upload prodi, dll) segera hadir.</p>' : ''}
+                        ${role === 'admin_cabang' ? '<p>📝 Halaman Admin Cabang (input nilai siswa) segera hadir.</p>' : ''}
+                        ${role === 'siswa' ? '<p>📖 Halaman Siswa (lihat rekomendasi) segera hadir.</p>' : ''}
+                    </div>
+                </div>
+            `
+            document.getElementById('logoutBtn').addEventListener('click', async () => {
+                await supabase.auth.signOut()
+                checkSession()
+            })
+        }
+
+        // Form login & daftar
+        function showAuthForms() {
+            appDiv.innerHTML = `
+                <div class="card">
+                    <h3>Login</h3>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="contoh@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="******">
+                    </div>
+                    <button id="loginBtn">Login</button>
+                    <p id="loginError" class="error"></p>
+                </div>
+                <div class="card">
+                    <h3>Daftar Akun Baru (Siswa)</h3>
+                    <div class="form-group">
+                        <label>Nama Lengkap</label>
+                        <input type="text" id="signupName" placeholder="Nama Anda">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="signupEmail" placeholder="contoh@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="signupPassword" placeholder="Minimal 6 karakter">
+                    </div>
+                    <button id="signupBtn">Daftar</button>
+                    <p id="signupError" class="error"></p>
+                    <p id="signupSuccess" class="success"></p>
+                </div>
+            `
+
+            // Event Login
+            document.getElementById('loginBtn').addEventListener('click', async () => {
+                const email = document.getElementById('loginEmail').value
+                const password = document.getElementById('loginPassword').value
+                const { error } = await supabase.auth.signInWithPassword({ email, password })
+                if (error) {
+                    document.getElementById('loginError').innerText = error.message
+                } else {
+                    checkSession()
+                }
+            })
+
+            // Event Daftar
+            document.getElementById('signupBtn').addEventListener('click', async () => {
+                const nama = document.getElementById('signupName').value
+                const email = document.getElementById('signupEmail').value
+                const password = document.getElementById('signupPassword').value
+                if (password.length < 6) {
+                    document.getElementById('signupError').innerText = 'Password minimal 6 karakter'
+                    return
+                }
+                // Daftar ke Supabase Auth, metadata nama akan ditangkap trigger
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: { nama: nama }
+                    }
+                })
+                if (error) {
+                    document.getElementById('signupError').innerText = error.message
+                    document.getElementById('signupSuccess').innerText = ''
+                } else {
+                    document.getElementById('signupError').innerText = ''
+                    document.getElementById('signupSuccess').innerText = 'Pendaftaran berhasil! Silakan login.'
+                    // Kosongkan form
+                    document.getElementById('signupName').value = ''
+                    document.getElementById('signupEmail').value = ''
+                    document.getElementById('signupPassword').value = ''
+                }
+            })
+        }
+
+        // Mulai
+        checkSession()
+    </script>
+</body>
+</html>
